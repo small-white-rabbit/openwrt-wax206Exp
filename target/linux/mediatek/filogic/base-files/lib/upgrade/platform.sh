@@ -85,6 +85,7 @@ platform_do_upgrade() {
 	nokia,ea0326gmp|\
 	openwrt,one|\
 	netcore,n60|\
+	netcore,n60-pro|\
 	qihoo,360t7|\
 	routerich,ax3000-ubootmod|\
 	tplink,tl-xdr4288|\
@@ -131,7 +132,8 @@ platform_do_upgrade() {
 		;;
 	cudy,re3000-v1|\
 	cudy,wr3000-v1|\
-	yuncore,ax835)
+	yuncore,ax835|\
+	wavlink,wl-wn573hx3)
 		default_do_upgrade "$1"
 		;;
 	dlink,aquila-pro-ai-m30-a1|\
@@ -139,6 +141,7 @@ platform_do_upgrade() {
 		fw_setenv sw_tryactive 0
 		nand_do_upgrade "$1"
 		;;
+	mercusys,mr80x-v3|\
 	mercusys,mr90x-v1|\
 	tplink,re6000xd)
 		CI_UBIPART="ubi0"

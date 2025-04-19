@@ -1221,6 +1221,20 @@ define Device/mediatek_mt7988a-rfb
 endef
 TARGET_DEVICES += mediatek_mt7988a-rfb
 
+define Device/mercusys_mr80x-v3
+  DEVICE_VENDOR := MERCUSYS
+  DEVICE_MODEL := MR80X
+  DEVICE_VARIANT := v3
+  DEVICE_DTS := mt7981b-mercusys-mr80x-v3
+  DEVICE_DTS_DIR := ../dts
+  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware
+  UBINIZE_OPTS := -E 5
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+endef
+TARGET_DEVICES += mercusys_mr80x-v3
+
 define Device/mercusys_mr90x-v1
   DEVICE_VENDOR := MERCUSYS
   DEVICE_MODEL := MR90X v1
@@ -1286,6 +1300,30 @@ define Device/netcore_n60
   ARTIFACT/bl31-uboot.fip := mt7986-bl31-uboot netcore_n60
 endef
 TARGET_DEVICES += netcore_n60
+
+define Device/netcore_n60-pro
+  DEVICE_VENDOR := Netcore
+  DEVICE_MODEL := N60 Pro
+  DEVICE_DTS := mt7986a-netcore-n60-pro
+  DEVICE_DTS_DIR := ../dts
+  UBINIZE_OPTS := -E 5
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  KERNEL_IN_UBI := 1
+  UBOOTENV_IN_UBI := 1
+  IMAGES := sysupgrade.itb
+  KERNEL_INITRAMFS_SUFFIX := -recovery.itb
+  KERNEL := kernel-bin | gzip
+  KERNEL_INITRAMFS := kernel-bin | lzma | \
+        fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 64k
+  IMAGE/sysupgrade.itb := append-kernel | \
+        fit gzip $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb external-static-with-rootfs | append-metadata
+  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7986-firmware mt7986-wo-firmware kmod-usb3
+  ARTIFACTS := preloader.bin bl31-uboot.fip
+  ARTIFACT/preloader.bin := mt7986-bl2 spim-nand-ddr4
+  ARTIFACT/bl31-uboot.fip := mt7986-bl31-uboot netcore_n60-pro
+endef
+TARGET_DEVICES += netcore_n60-pro
 
 define Device/netgear_wax220
   DEVICE_VENDOR := NETGEAR
@@ -1639,6 +1677,24 @@ define Device/wavlink_wl-wn586x3
   DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware
 endef
 TARGET_DEVICES += wavlink_wl-wn586x3
+
+define Device/wavlink_wl-wn573hx3
+  DEVICE_VENDOR := WAVLINK
+  DEVICE_MODEL := WL-WN573HX3
+  DEVICE_ALT0_VENDOR := 7Links
+  DEVICE_ALT0_MODEL := WLR-1300
+  DEVICE_DTS := mt7981b-wavlink-wl-wn573hx3
+  DEVICE_DTS_DIR := ../dts
+  DEVICE_DTS_LOADADDR := 0x47000000
+  IMAGE_SIZE := 14336k
+  KERNEL := kernel-bin | lzma | \
+	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb
+  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware
+  SUPPORTED_DEVICES += mediatek,mt7981-spim-nor-rfb
+  IMAGES = WN573HX3-sysupgrade.bin
+  IMAGE/WN573HX3-sysupgrade.bin := append-kernel | pad-to 128k | append-rootfs | pad-rootfs | check-size | append-metadata
+endef
+TARGET_DEVICES += wavlink_wl-wn573hx3
 
 define Device/xiaomi_mi-router-ax3000t
   DEVICE_VENDOR := Xiaomi
