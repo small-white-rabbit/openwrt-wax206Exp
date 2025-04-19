@@ -1,3 +1,15 @@
+
+##该版本为扩容固件，将固件空间扩容至256M，其它均同步于openwrt官方源码
+
+##扩容步骤自行查询，该版本首次刷机需刷入两次方可完成
+
+
+
+
+
+
+
+
 ![OpenWrt logo](include/logo.png)
 
 OpenWrt Project is a Linux operating system targeting embedded devices. Instead
