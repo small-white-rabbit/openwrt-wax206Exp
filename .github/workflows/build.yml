@@ -1,0 +1,83 @@
+name: Build OpenWrt Firmware
+
+# 触发条件：推送代码到 main 分支或创建 pull request
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+      # 检出仓库代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 设置缓存以加速编译
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ccache
+            ./dl
+          key: ${{ runner.os }}-openwrt-${{ hashFiles('configs/.config') }}
+          restore-keys: |
+            ${{ runner.os }}-openwrt-
+
+      # 安装依赖
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib \
+            gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev \
+            file wget subversion python3 curl
+          sudo apt-get clean
+
+      # 初始化 OpenWrt feeds
+      - name: Initialize feeds
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      # 复制 .config 文件
+      - name: Copy configuration
+        run: |
+          cp configs/.config .config || echo "Error: .config file not found in configs/"
+          make defconfig
+
+      # 下载依赖
+      - name: Download dependencies
+        run: make download -j$(nproc)
+
+      # 编译固件
+      - name: Build firmware
+        run: |
+          export FORCE_UNSAFE_CONFIGURE=1
+          make -j$(nproc) V=s
+        env:
+          CONFIG_SIGNED_PACKAGES: ""
+
+      # 上传编译产物
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-firmware
+          path: bin/targets/*/*/*.bin
+          retention-days: 7
+
+      # 发布到 GitHub Releases（仅在 push 到 main 分支时）
+      - name: Create Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/targets/*/*/*.bin
+          tag_name: "build-${{ github.sha }}"
+          name: "Build ${{ github.sha }}"
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
