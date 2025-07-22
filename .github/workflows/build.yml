@@ -46,7 +46,7 @@ jobs:
       # 复制 .config 文件
       - name: Copy configuration
         run: |
-          cp configs/.config .config || echo "Error: .config file not found in configs/"
+          cp configs/wax206.config || echo "Error: .config file not found in configs/"
           make defconfig
 
       # 下载依赖
