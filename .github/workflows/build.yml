@@ -1,97 +1,189 @@
-name: 编译 OpenWrt 固件 - MediaTek mt7622 (WAX206)
+
+
+# This is free software, licensed under the MIT License.
+# See /LICENSE for more information.
+#
+
+name: Openwrt-wax206-自用扩容固件
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  repository_dispatch:
+  workflow_dispatch:
+
+env:
+  REPO_URL: https://github.com/small-white-rabbit/openwrt-wax206Exp
+  REPO_BRANCH: main
+  CONFIG_FILE: Config/mt7622_wax206.config
+  Feeds_SH: Scripts/Feeds.sh
+  Settings_SH: Scripts/Settings.sh
+  UPLOAD_BIN_DIR: false
+  UPLOAD_FIRMWARE: true
+  UPLOAD_RELEASE: true
+  TZ: Asia/Shanghai
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
+
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
+    - name: 准备完成
+      uses: actions/checkout@main
 
-      - name: 检查磁盘空间（编译前）
-        run: df -h
-        if: always()
+    - name: 检查服务器配置
+      run: |
+        echo "警告⚠"
+        echo "分配的服务器性能有限，若选择的插件过多，务必注意CPU性能！"
+        echo -e "已知CPU型号(降序): 7763，8370C，8272CL，8171M，E5-2673 \n"
+        echo -e "-------------- ------------CPU信息------------------------------------------"
+        echo "CPU物理数量:$(cat /proc/cpuinfo| grep "physical id"| sort| uniq| wc -l)"
+        echo "CPU线程数量: $(nproc)"
+        echo -e "CPU核心及版本信息：$(cat /proc/cpuinfo | grep name | cut -f2 -d: | uniq -c) \n"
+        echo "-------------------------------内存信息-------------------------------------------"
+        echo "已安装内存详细信息："
+        echo -e "$(sudo lshw -short -C memory | grep GiB) \n"
+        echo "-----------------------------硬盘信息---------------------------------------------"
+        echo -e  "硬盘数量：$(ls /dev/sd* | grep -v [1-9] | wc -l)"
+        echo "硬盘详情："
+        echo "系统空间        类型   总数  已用  可用  使用率"
+        df -Th
 
-      - name: 设置缓存
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.ccache
-            ./dl
-          key: ${{ runner.os }}-openwrt-mt7622-${{ hashFiles('configs/mt7622_wax206.config') }}
-          restore-keys: |
-            ${{ runner.os }}-openwrt-mt7622-
+    - name: 初始化编译环境
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        echo "------------------------------- 更新并安装依赖 -------------------------------"
+        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+        sudo docker image prune --all --force
+        sudo -E apt-get -qq update
+        sudo -E apt-get -qq install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+        sudo -E apt-get -qq autoremove --purge
+        sudo -E apt-get -qq clean
+        echo "------------------------------- 设置工作目录及时区 -------------------------------"
+        sudo timedatectl set-timezone "$TZ"
+        sudo mkdir -p /mnt/workdir
+        sudo chown $USER:$GROUPS /mnt/workdir
 
-      - name: 安装依赖
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib \
-            gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev \
-            file wget subversion python3 curl
-          sudo apt-get clean
-          sudo rm -rf /var/lib/apt/lists/*
+    - name: 克隆源代码
+      working-directory: /mnt/workdir
+      run: |
+        df -hT $PWD
+        git clone $REPO_URL -b $REPO_BRANCH openwrt-wax206Exp
+        ln -sf /mnt/workdir/openwrt-wax206Exp $GITHUB_WORKSPACE/openwrt-wax206Exp
 
-      - name: 清理编译环境（编译前）
-        run: |
-          make clean
-          rm -rf tmp/* build_dir/* staging_dir/*
-        if: always()
+    - name: 加载自定义订阅源
+      run: |
+        chmod +x $Feeds_SH
+        cd openwrt-wax206Exp
+        bash $GITHUB_WORKSPACE/$Feeds_SH
 
-      - name: 初始化 feeds
-        run: |
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+    - name: 更新拉取源
+      run: cd openwrt-wax206Exp && ./scripts/feeds update -a
 
-      - name: 复制配置文件
-        run: |
-          cp configs/mt7622_wax206.config .config || echo "错误：未找到 configs/mt7622_wax206.config"
-          make defconfig
+    - name: 安装拉取源
+      run: cd openwrt-wax206Exp && ./scripts/feeds install -a
 
-      - name: 下载依赖
-        run: make download -j$(nproc)
+    - name: 加载自定义配置
+      run: |
+        [ -e "$CONFIG_FILE" ] && mv "$CONFIG_FILE" openwrt-wax206Exp/.config
+        chmod +x $Settings_SH
+        cd openwrt-wax206Exp
+        bash $GITHUB_WORKSPACE/$Settings_SH
 
-      - name: 编译固件
-        run: |
-          export FORCE_UNSAFE_CONFIGURE=1
-          make -j2 V=s
-        env:
-          CONFIG_SIGNED_PACKAGES: ""
+    - name: 下载软件包
+      id: package
+      run: |
+        cd openwrt-wax206Exp
+        make defconfig
+        make download -j8
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
 
-      - name: 上传固件
-        uses: actions/upload-artifact@v4
-        with:
-          name: openwrt-firmware-mt7622-wax206
-          path: bin/targets/mediatek/mt7622/*.bin
-          retention-days: 7
-        if: always()
+    - name: 编译固件
+      id: compile
+      run: |
+        cd openwrt-wax206Exp
+        echo -e "$(nproc) thread compile"
+        make -j$(nproc) || make -j1 || make -j1 V=s
+        echo "status=success" >> $GITHUB_OUTPUT
+        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
+        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
+        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
 
-      - name: 清理编译环境（编译后）
-        run: |
-          make clean
-          rm -rf tmp/* build_dir/* staging_dir/*
-          sudo apt-get clean
-          sudo rm -rf /var/lib/apt/lists/*
-        if: always()
+    - name: 检查空间使用情况
+      if: (!cancelled())
+      run: df -hT
 
-      - name: 检查磁盘空间（编译后）
-        run: df -h
-        if: always()
+    - name: 上传bin目录
+      uses: actions/upload-artifact@main
+      if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
+      with:
+        name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+        path: openwrt-wax206Exp/bin
 
-      - name: 创建 GitHub Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: bin/targets/mediatek/mt7622/*.bin
-          tag_name: "firmware-mt7622-wax206-${{ github.sha }}"
-          name: "WAX206 固件 ${{ github.sha }}"
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: 整理文件
+      id: organize
+      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+      run: |
+        cd openwrt-wax206Exp/bin/targets/*/*
+        rm -rf packages *.buildinfo *.json *.manifest
+        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+        echo "status=success" >> $GITHUB_OUTPUT
+
+    - name: 上传固件目录
+      uses: actions/upload-artifact@main
+      if: steps.organize.outputs.status == 'success' && !cancelled()
+      with:
+        name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+        path: ${{ env.FIRMWARE }}
+
+    - name: 准备发布说明
+      id: tag
+      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      run: |
+        # 生成版本标签
+        echo "release_tag=openwrt-wax206Exp-$(date +"%Y.%m.%d-%H%M%S")" >> $GITHUB_OUTPUT
+        
+        # 生成发布说明
+        cat <<EOF > release.txt
+        🚀 openwrt-wax206Exp 自动构建结果
+        
+        📅 编译时间: $(date +"%Y-%m-%d %H:%M:%S %Z")
+        💻 设备型号: wax206 - openwrt
+        
+        🔗 源码仓库: $REPO_URL
+        🌱 代码分支: $REPO_BRANCH
+        
+        🔐 默认凭据:
+          IP: 192.168.31.1
+          用户名: root
+          密码: password
+          
+        EOF
+        
+        echo "status=success" >> $GITHUB_OUTPUT
+      # 备注：生成格式化的发布说明
+
+    - name: 上传固件以发布
+      uses: softprops/action-gh-release@master
+      if: steps.tag.outputs.status == 'success' && !cancelled()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.tag.outputs.release_tag }}
+        body_path: release.txt
+        files: ${{ env.FIRMWARE }}/*
+
+    - name: 删除工作流运行
+      uses: Mattraks/delete-workflow-runs@main
+      with:
+        retain_days: 0
+        keep_minimum_runs: 2
+
+    - name: 删除旧版本
+      uses: dev-drprasad/delete-older-releases@master
+      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      with:
+        keep_latest: 10
+        delete_tags: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
